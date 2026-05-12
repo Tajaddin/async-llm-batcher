@@ -1,0 +1,46 @@
+{
+  "fresh": {
+    "n_total": 1000,
+    "n_attempted": 1000,
+    "n_succeeded": 988,
+    "n_dlq": 12,
+    "total_attempts": 1068,
+    "completion_rate": 1.0,
+    "mean_attempts_per_success": 1.081,
+    "elapsed_secs": 29.93,
+    "throughput_per_sec": 33.4,
+    "counts": {
+      "dlq": 12,
+      "success": 988
+    }
+  },
+  "resume_demo": {
+    "first_run": {
+      "n_attempted": 300,
+      "n_succeeded": 295,
+      "n_dlq": 5,
+      "counts_after": {
+        "dlq": 5,
+        "success": 295
+      }
+    },
+    "resume_run": {
+      "n_attempted": 700,
+      "n_succeeded": 988,
+      "n_dlq": 12,
+      "counts_after": {
+        "dlq": 12,
+        "success": 988
+      }
+    },
+    "resume_only_processed_new_prompts": true
+  },
+  "args": {
+    "n_prompts": 1000,
+    "rate_rps": 50,
+    "concurrency": 20,
+    "transient_rate": 0.05,
+    "permanent_rate": 0.005,
+    "seed": 7
+  }
+}

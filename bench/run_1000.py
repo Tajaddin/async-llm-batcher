@@ -10,11 +10,11 @@ This script:
 
 1. Runs 1000 prompts with a mock handler that injects:
    - 5% transient failures (asks the runner to retry)
-   - 0.5% permanent failures (routes straight to DLQ — *expected* loss)
+   - 0.5% permanent failures (routes straight to DLQ, expected loss)
 2. Caps the call rate at 50 RPS via TokenBucketRateLimiter.
 3. Reports completion rate, mean attempts/success, DLQ size, total time.
-4. Simulates a kill-mid-run: stops 30% of the way through, then resumes;
-   shows only the remaining prompts are processed.
+4. Simulates a kill-mid-run: stops 30% of the way through, then resumes.
+   Only the remaining prompts are processed.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ async def resume_demo(args, transient_rate, permanent_rate) -> dict:
     cp1.close()
     counts_after_first = res1.counts
 
-    # Resume — fresh checkpointer pointed at the same file, full prompt list.
+    # Resume. Fresh checkpointer pointed at the same file, full prompt list.
     cp2 = SqliteCheckpointer(DB_PATH)
     runner2 = BatchRunner(
         handler=make_handler(transient_rate, permanent_rate, seed=args.seed + 1),
@@ -138,10 +138,10 @@ async def resume_demo(args, transient_rate, permanent_rate) -> dict:
 
 
 def main() -> int:
-    try:
+    import contextlib
+
+    with contextlib.suppress(Exception):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-    except Exception:
-        pass
     p = argparse.ArgumentParser()
     p.add_argument("--n-prompts", type=int, default=1000)
     p.add_argument("--rate-rps", type=int, default=50)

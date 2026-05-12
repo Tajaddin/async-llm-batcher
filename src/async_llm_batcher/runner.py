@@ -11,13 +11,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Iterable
+from typing import Any
 
 from async_llm_batcher.checkpointer import PromptStatus, SqliteCheckpointer
 from async_llm_batcher.rate_limit import TokenBucketRateLimiter
-from async_llm_batcher.retry import PermanentError, RetryPolicy, TransientError
-
+from async_llm_batcher.retry import PermanentError, RetryPolicy
 
 Handler = Callable[[str, str], Awaitable[Any]]
 
@@ -119,10 +119,10 @@ class BatchRunner:
                         cp.mark_dlq(pid, f"PermanentError: {exc}")
                         return
                     except Exception as exc:  # noqa: BLE001
-                        # Transient or unknown — count and possibly retry.
+                        # Transient or unknown. Count and retry.
                         cp.increment_attempt(pid, error=f"{type(exc).__name__}: {str(exc)[:200]}")
                         if attempt >= self.retry.max_attempts:
-                            cp.mark_dlq(pid, f"exhausted retries; last={exc!r}")
+                            cp.mark_dlq(pid, f"exhausted retries, last={exc!r}")
                             return
                         await self.retry.sleep(attempt)
 

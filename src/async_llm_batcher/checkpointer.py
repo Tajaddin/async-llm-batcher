@@ -53,9 +53,9 @@ CREATE INDEX IF NOT EXISTS prompts_status_idx ON prompts(status);
 class SqliteCheckpointer:
     """Thread-safe SQLite-backed prompt state store.
 
-    All methods are synchronous — callers from async code should keep state
+    All methods are synchronous. Callers from async code keep state
     operations small (one row at a time) and run them on the event-loop
-    thread. The bench shows this isn't a bottleneck even at 1000 prompts.
+    thread. The bench shows this is not a bottleneck even at 1000 prompts.
     """
 
     def __init__(self, path: str | Path | None = ":memory:") -> None:

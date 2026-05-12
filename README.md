@@ -1,8 +1,10 @@
 # async-llm-batcher
 
-> Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-letter queue, and SQLite resume-from-crash state. **1000 prompts at 50 RPS with 5% transient + 0.5% permanent failure injection: 988 succeed, 12 DLQ, zero data loss, 1.08 mean attempts per success.** Kill mid-run and resume — only the remaining 700 prompts are processed.
+Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-letter queue, and SQLite resume-from-crash state. 1000 prompts at 50 RPS under 5 % transient and 0.5 % permanent failure injection: 991 succeed, 9 DLQ, zero data loss, 1.065 mean attempts per success. Kill mid-run and resume. Only the remaining 700 prompts are processed.
 
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Tests](https://img.shields.io/badge/tests-21%20passing-brightgreen)](#tests) [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
+[![ci](https://github.com/Tajaddin/async-llm-batcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Tajaddin/async-llm-batcher/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 
 ## Hero benchmark
 
@@ -11,22 +13,23 @@
 | Metric | Value |
 |---|---:|
 | Total prompts | 1000 |
-| Succeeded | **988** |
-| DLQ (permanent + exhausted retries) | 12 |
-| **Completion rate** (success + DLQ) | **100.0%** — every prompt accounted for, zero data loss |
-| Mean attempts per success | **1.081** |
-| Total wall-clock | 29.9 s |
-| Throughput | 33.4 prompts/s (retries pull below the 50 RPS cap) |
+| Succeeded | **991** |
+| DLQ (permanent + exhausted retries) | 9 |
+| **Completion rate** (success + DLQ) | **100.0%**: every prompt accounted for, zero data loss |
+| Mean attempts per success | **1.065** |
+| Total attempts | 1055 |
+| Total wall-clock | 28.7 s |
+| Throughput | 34.8 prompts/s (retries pull below the 50 RPS cap) |
 
 ### Resume-after-kill demo
 
 ```
 First run (interrupted at 30%):
-  attempted=300  succeeded=295  dlq=5
+  attempted=300  succeeded=297  dlq=3
 
 Resume run (full 1000 prompts queued again):
-  attempted=700  ← only the remaining ones; the 300 already in SUCCESS/DLQ are skipped
-  succeeded=988  dlq=12   (cumulative)
+  attempted=700  (only the remaining ones, the 300 already in SUCCESS/DLQ are skipped)
+  succeeded=991  dlq=9   (cumulative)
 ```
 
 The runner reads the existing SQLite state on startup, resets anything stuck in `IN_PROGRESS` back to `PENDING`, and only enqueues prompts not in a terminal state. **Idempotent by construction.**
@@ -35,7 +38,7 @@ Reproduce: `python bench/run_1000.py`. Raw JSON in [`bench/results.json`](bench/
 
 ## Why this exists
 
-Anyone who has shipped batch LLM workloads — summarization, classification, eval — ends up writing the same four things by hand:
+Anyone who has shipped batch LLM workloads (summarization, classification, eval) ends up writing the same four things by hand:
 
 1. A concurrency limiter so you don't 429 yourself off the cliff.
 2. Exponential-backoff retry with jitter and a hard cap.
@@ -94,7 +97,7 @@ from async_llm_batcher import (
 )
 
 async def my_handler(prompt_id: str, prompt: str):
-    # your async LLM call here; raise TransientError to retry, PermanentError to DLQ
+    # your async LLM call here. Raise TransientError to retry, PermanentError to DLQ.
     response = await anthropic_client.messages.create(...)
     return response.content[0].text
 
@@ -132,7 +135,7 @@ async def handler(pid, text):
         # Retryable: backoff and try again.
         raise TransientError(str(e))
     except APIStatusError as e:
-        if e.status_code == 400:                # bad input — never going to work
+        if e.status_code == 400:                # bad input, never going to work
             raise PermanentError(str(e))
         raise TransientError(str(e))            # 5xx, timeouts, etc.
     return resp.content[0].text
@@ -146,9 +149,9 @@ Three things make the runner crash-safe:
 
 1. **Every state change writes immediately to SQLite.** No buffered "I'll persist when I get to a milestone."
 2. **`IN_PROGRESS` rows are reset to `PENDING` at the start of every run.** A worker killed mid-handler doesn't leak.
-3. **`enqueue()` is idempotent** — re-running the same prompt list is a no-op for already-completed rows.
+3. **`enqueue()` is idempotent.** Re-running the same prompt list is a no-op for already-completed rows.
 
-The result: just point a new `BatchRunner` at the same checkpoint file and call `run(prompts)` again. The runner figures out what's left.
+The result: point a new `BatchRunner` at the same checkpoint file and call `run(prompts)` again. The runner figures out what's left.
 
 ```python
 # After a SIGTERM:
@@ -209,16 +212,16 @@ pytest -q
     └── results.json
 ```
 
-## Limitations
+## Caveats
 
 **Single process.** SQLite WAL would let multiple workers share a checkpoint file, but the current schema doesn't use WAL and the runner is single-process by design. For multi-host fan-out, point each worker at a different prompt slice and a shared output store.
 
-**No streaming.** The handler returns a full response; streaming LLM responses aren't yet wired. A natural v0.2 extension would have the handler yield partial chunks and the checkpointer record progress at periodic checkpoints.
+**No streaming.** The handler returns a full response. Streaming LLM responses are not wired. A natural v0.2 extension has the handler yield partial chunks and the checkpointer record progress at periodic checkpoints.
 
-**Rate limiter is per-runner.** If you instantiate two `BatchRunner`s in the same process, they each get their own bucket — no shared accounting. For a shared quota across runners, pass the *same* `TokenBucketRateLimiter` instance to both.
+**Rate limiter is per-runner.** Two `BatchRunner` instances in the same process each get their own bucket. No shared accounting. For a shared quota across runners, pass the same `TokenBucketRateLimiter` instance to both.
 
-**Async-only handler.** Sync handlers need to be wrapped in `asyncio.to_thread(...)` by the caller. The runner doesn't auto-wrap, on purpose — it keeps the contract narrow.
+**Async-only handler.** Sync handlers need an `asyncio.to_thread(...)` wrap at the caller. The runner does not auto-wrap, by design. The contract stays narrow.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

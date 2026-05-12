@@ -6,12 +6,9 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from async_llm_batcher import (
     BatchRunner,
     PermanentError,
-    PromptStatus,
     RetryPolicy,
     SqliteCheckpointer,
     TokenBucketRateLimiter,

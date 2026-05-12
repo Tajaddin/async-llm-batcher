@@ -1,11 +1,11 @@
 """Asyncio token-bucket rate limiter.
 
 Drops tokens into a bucket at ``rate`` per second, capped at ``capacity``.
-Callers ``await acquire()`` before each call; if the bucket is empty they
-sleep until the next refill.
+Callers ``await acquire()`` before each call. An empty bucket sleeps the
+caller until the next refill.
 
-The implementation is deliberately tiny — ~40 lines, no external deps — so a
-reviewer can confirm correctness at a glance.
+The implementation is deliberately tiny (~40 lines, no external deps) so a
+reviewer confirms correctness at a glance.
 """
 
 from __future__ import annotations

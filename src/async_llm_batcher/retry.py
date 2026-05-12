@@ -2,8 +2,8 @@
 
 Distinguishes two failure modes:
 
-* :class:`TransientError` — retryable. Network timeouts, 429s, 5xx.
-* :class:`PermanentError` — not retryable. 400s, schema violations, etc.
+* :class:`TransientError`: retryable. Network timeouts, 429s, 5xx.
+* :class:`PermanentError`: not retryable. 400s, schema violations.
 
 Anything else (a plain ``Exception``) is treated as transient by default.
 """
@@ -16,11 +16,11 @@ from dataclasses import dataclass
 
 
 class TransientError(Exception):
-    """Retryable error — the runner will backoff and try again."""
+    """Retryable error. The runner backs off and tries again."""
 
 
 class PermanentError(Exception):
-    """Non-retryable error — the runner will route the prompt straight to DLQ."""
+    """Non-retryable error. The runner routes the prompt straight to DLQ."""
 
 
 @dataclass
@@ -38,7 +38,7 @@ class RetryPolicy:
     jitter_secs: float = 0.25
 
     def delay_for(self, attempt: int) -> float:
-        """``attempt`` is 1-indexed — first retry uses ``base_delay_secs``."""
+        """``attempt`` is 1-indexed. The first retry uses ``base_delay_secs``."""
         if attempt < 1:
             return 0.0
         exp = self.base_delay_secs * (self.factor ** (attempt - 1))

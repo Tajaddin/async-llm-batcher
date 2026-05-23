@@ -107,9 +107,21 @@ class SqliteCheckpointer:
                 (error, PromptStatus.PENDING.value, time.time(), prompt_id),
             )
 
+    # Hardcoded allowlist of columns that _update is permitted to write. Field
+    # NAMES (unlike values) are not parameterized in SQL, so an attacker-shaped
+    # kwarg name could otherwise be interpolated into the UPDATE statement. We
+    # accept only the writable columns from _SCHEMA and reject anything else.
+    _UPDATABLE_COLUMNS = frozenset({"status", "attempts", "result_json", "error", "updated_at"})
+
     def _update(self, prompt_id: str, **fields: Any) -> None:
         if not fields:
             return
+        invalid = set(fields) - self._UPDATABLE_COLUMNS
+        if invalid:
+            raise ValueError(
+                f"_update rejected non-allowlisted column name(s): {sorted(invalid)}. "
+                f"Allowed: {sorted(self._UPDATABLE_COLUMNS)}"
+            )
         fields["updated_at"] = time.time()
         columns = ", ".join(f"{k} = ?" for k in fields)
         values = [v.value if isinstance(v, PromptStatus) else v for v in fields.values()]

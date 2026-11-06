@@ -67,6 +67,10 @@ class BatchRunner:
         resume across processes).
     concurrency:
         Max number of in-flight handler calls.
+    call_timeout_secs:
+        Seconds a single handler call may run. A call that runs longer is
+        cancelled, frees its concurrency slot, and counts as a transient
+        failure. ``None`` disables the limit.
     """
 
     handler: Handler
@@ -74,6 +78,7 @@ class BatchRunner:
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     checkpointer: SqliteCheckpointer | None = None
     concurrency: int = 10
+    call_timeout_secs: float | None = 600.0
 
     def __post_init__(self) -> None:
         if self.checkpointer is None:
@@ -112,7 +117,9 @@ class BatchRunner:
                     if self.rate_limit is not None:
                         await self.rate_limit.acquire(1.0)
                     try:
-                        result = await self.handler(pid, text)
+                        result = await asyncio.wait_for(
+                            self.handler(pid, text), self.call_timeout_secs
+                        )
                     except PermanentError as exc:
                         cp.mark_dlq(pid, f"PermanentError: {exc}")
                         return

@@ -189,3 +189,27 @@ async def test_unrecordable_result_is_not_paid_for_twice() -> None:
     assert calls["n"] == 1
     assert res.n_dlq == 1 and res.n_succeeded == 0
     assert "not JSON-serialisable" in (cp.get("p").error or "")
+
+
+async def test_hung_call_times_out_and_frees_its_slot() -> None:
+    calls: list[str] = []
+
+    async def handler(pid, text):
+        calls.append(pid)
+        if pid == "p1" and calls.count("p1") == 1:
+            await asyncio.Event().wait()  # never returns
+        return text
+
+    cp = SqliteCheckpointer(":memory:")
+    runner = BatchRunner(
+        handler=handler, retry=_fast_retry(), checkpointer=cp, concurrency=1, call_timeout_secs=0.05
+    )
+    res = await asyncio.wait_for(runner.run([("p1", "a"), ("p2", "b")]), timeout=5)
+    assert res.n_succeeded == 2
+    assert calls.count("p1") == 2
+    assert cp.get("p1").attempts == 1  # the timed-out call counted as a failed attempt
+
+
+async def test_default_call_timeout_is_finite() -> None:
+    runner = BatchRunner(handler=lambda pid, text: None)
+    assert runner.call_timeout_secs is not None and runner.call_timeout_secs > 0

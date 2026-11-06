@@ -173,6 +173,7 @@ Covered by `tests/test_runner.py::test_resume_from_disk_after_kill`.
 | Knob | Type | Default | Effect |
 |---|---|---|---|
 | `concurrency` | int | 10 | max in-flight handler calls |
+| `call_timeout_secs` | `float \| None` | 600 | per-call limit. A call that runs longer is cancelled and retried as a transient failure. `None` disables it |
 | `rate_limit` | `TokenBucketRateLimiter \| None` | `None` | hard rate cap, in calls/sec |
 | `RetryPolicy.max_attempts` | int | 5 | retries before DLQ |
 | `RetryPolicy.base_delay_secs` | float | 0.5 | first backoff |

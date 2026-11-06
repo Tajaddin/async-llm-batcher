@@ -81,6 +81,11 @@ class BatchRunner:
     call_timeout_secs: float | None = 600.0
 
     def __post_init__(self) -> None:
+        if self.rate_limit is not None and self.rate_limit.capacity < 1:
+            raise ValueError(
+                f"rate_limit capacity is {self.rate_limit.capacity}; it must be >= 1, "
+                "since each handler call takes one token"
+            )
         if self.checkpointer is None:
             self.checkpointer = SqliteCheckpointer(":memory:")
         self._sem = asyncio.Semaphore(self.concurrency)

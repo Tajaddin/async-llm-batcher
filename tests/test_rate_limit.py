@@ -52,3 +52,9 @@ async def test_request_larger_than_capacity_is_rejected() -> None:
     rl = TokenBucketRateLimiter(rate=5, capacity=2)
     with pytest.raises(ValueError, match="capacity"):
         await asyncio.wait_for(rl.acquire(3), timeout=1.0)
+
+
+@pytest.mark.parametrize("capacity", [0, -1])
+async def test_non_positive_capacity_rejected(capacity: float) -> None:
+    with pytest.raises(ValueError, match="capacity"):
+        TokenBucketRateLimiter(rate=5, capacity=capacity)

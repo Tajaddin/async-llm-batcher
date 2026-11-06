@@ -6,6 +6,8 @@ import asyncio
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from async_llm_batcher import (
     BatchRunner,
     PermanentError,
@@ -236,3 +238,11 @@ async def test_hung_call_times_out_and_frees_its_slot() -> None:
 async def test_default_call_timeout_is_finite() -> None:
     runner = BatchRunner(handler=lambda pid, text: None)
     assert runner.call_timeout_secs is not None and runner.call_timeout_secs > 0
+
+
+async def test_runner_rejects_a_bucket_that_cannot_hold_one_call() -> None:
+    async def handler(pid, text):
+        return text
+
+    with pytest.raises(ValueError, match="capacity"):
+        BatchRunner(handler=handler, rate_limit=TokenBucketRateLimiter(rate=5, capacity=0.5))

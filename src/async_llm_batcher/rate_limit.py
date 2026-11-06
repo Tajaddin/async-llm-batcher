@@ -31,6 +31,8 @@ class TokenBucketRateLimiter:
             raise ValueError("rate must be > 0")
         self.rate = float(rate)
         self.capacity = float(capacity if capacity is not None else max(rate, 1.0))
+        if self.capacity <= 0:
+            raise ValueError("capacity must be > 0")
         self._tokens = self.capacity
         self._last_refill = time.monotonic()
         self._lock = asyncio.Lock()

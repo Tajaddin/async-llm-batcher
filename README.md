@@ -143,7 +143,7 @@ async def handler(pid, text):
 
 Anything else (a plain `Exception`) is treated as transient by default. Once `RetryPolicy.max_attempts` is hit, the prompt is moved to DLQ with the last exception attached.
 
-The handler's return value is stored as JSON, so return plain data (`resp.content[0].text`, not `resp`). A result that can't be serialised sends the prompt to DLQ as `result not JSON-serialisable`. The call is never repeated, since it already succeeded.
+The handler's return value is stored as JSON, so return plain data (`resp.content[0].text`, not `resp`). A result that can't be serialised sends the prompt to DLQ as `result not JSON-serialisable`, and any other failure to store it (a locked database, say) sends it there as `storing the result failed`, with the error type. Either way the call is never repeated, since it already succeeded, and the rest of the batch carries on.
 
 ## Resume from crash
 

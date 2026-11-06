@@ -137,6 +137,8 @@ class BatchRunner:
                             cp.mark_success(pid, result)
                         except (TypeError, ValueError) as exc:
                             cp.mark_dlq(pid, f"result not JSON-serialisable: {exc}")
+                        except Exception as exc:  # noqa: BLE001
+                            cp.mark_dlq(pid, f"storing the result failed: {type(exc).__name__}: {exc}")
                         return
 
         start = time.perf_counter()

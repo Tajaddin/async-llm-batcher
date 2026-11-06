@@ -191,6 +191,29 @@ async def test_unrecordable_result_is_not_paid_for_twice() -> None:
     assert "not JSON-serialisable" in (cp.get("p").error or "")
 
 
+async def test_failure_to_store_a_result_goes_to_dlq_without_stopping_the_batch() -> None:
+    import sqlite3
+
+    calls: list[str] = []
+
+    class LockedOnP1(SqliteCheckpointer):
+        def mark_success(self, prompt_id, result):
+            if prompt_id == "p1":
+                raise sqlite3.OperationalError("database is locked")
+            super().mark_success(prompt_id, result)
+
+    async def handler(pid, text):
+        calls.append(pid)
+        return text
+
+    cp = LockedOnP1(":memory:")
+    runner = BatchRunner(handler=handler, retry=_fast_retry(), checkpointer=cp, concurrency=1)
+    res = await runner.run([("p1", "a"), ("p2", "b")])
+    assert calls == ["p1", "p2"]
+    assert res.n_succeeded == 1 and res.n_dlq == 1
+    assert "OperationalError: database is locked" in (cp.get("p1").error or "")
+
+
 async def test_hung_call_times_out_and_frees_its_slot() -> None:
     calls: list[str] = []
 

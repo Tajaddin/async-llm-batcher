@@ -171,3 +171,21 @@ async def test_in_progress_reset_on_resume() -> None:
     runner = BatchRunner(handler=handler, retry=_fast_retry(), checkpointer=cp, concurrency=1)
     res = await runner.run([("a", "x")])
     assert res.n_succeeded == 1
+
+
+async def test_unrecordable_result_is_not_paid_for_twice() -> None:
+    calls = {"n": 0}
+
+    class SdkResponse:  # not JSON-serialisable
+        pass
+
+    async def handler(pid, text):
+        calls["n"] += 1
+        return SdkResponse()
+
+    cp = SqliteCheckpointer(":memory:")
+    runner = BatchRunner(handler=handler, retry=_fast_retry(), checkpointer=cp, concurrency=1)
+    res = await runner.run([("p", "hi")])
+    assert calls["n"] == 1
+    assert res.n_dlq == 1 and res.n_succeeded == 0
+    assert "not JSON-serialisable" in (cp.get("p").error or "")

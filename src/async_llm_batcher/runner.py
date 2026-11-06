@@ -113,8 +113,6 @@ class BatchRunner:
                         await self.rate_limit.acquire(1.0)
                     try:
                         result = await self.handler(pid, text)
-                        cp.mark_success(pid, result)
-                        return
                     except PermanentError as exc:
                         cp.mark_dlq(pid, f"PermanentError: {exc}")
                         return
@@ -125,6 +123,14 @@ class BatchRunner:
                             cp.mark_dlq(pid, f"exhausted retries, last={exc!r}")
                             return
                         await self.retry.sleep(attempt)
+                    else:
+                        # Outside the retry block: the call already succeeded, so a
+                        # result that cannot be stored must not trigger another call.
+                        try:
+                            cp.mark_success(pid, result)
+                        except (TypeError, ValueError) as exc:
+                            cp.mark_dlq(pid, f"result not JSON-serialisable: {exc}")
+                        return
 
         start = time.perf_counter()
         await asyncio.gather(*[_worker(pid, text) for pid, text in to_run])

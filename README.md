@@ -190,14 +190,14 @@ pytest -q
 ```
 
 ```
-21 passed in 3.33s
+26 passed
 ```
 
 `pytest-asyncio` test suite. Covers:
 
-* Rate limiter math (immediate when full, throttles to rate, rejects bad input)
+* Rate limiter math (immediate when full, throttles to rate, rejects bad input, rates below 1/s, requests above capacity)
 * Checkpointer (enqueue dedup, status transitions, persistence across handles, `IN_PROGRESS` reset)
-* Runner (clean run, transient retry, permanent → DLQ, exhausted → DLQ, resume from disk after kill, concurrency cap, rate-limiter integration)
+* Runner (clean run, transient retry, permanent → DLQ, exhausted → DLQ, resume from disk after kill, concurrency cap, rate-limiter integration, unserialisable result called once, hung call timed out)
 
 ## Project layout
 
@@ -209,7 +209,7 @@ pytest -q
 │   ├── retry.py         # RetryPolicy + TransientError + PermanentError
 │   ├── checkpointer.py  # SQLite per-prompt state
 │   └── runner.py        # BatchRunner with concurrency + retry + DLQ
-├── tests/               # 21 pytest-asyncio cases
+├── tests/               # 26 pytest-asyncio cases
 └── bench/
     ├── run_1000.py      # 1000-prompt benchmark + resume-after-kill demo
     └── results.json

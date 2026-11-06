@@ -190,14 +190,14 @@ pytest -q
 ```
 
 ```
-26 passed
+30 passed
 ```
 
 `pytest-asyncio` test suite. Covers:
 
-* Rate limiter math (immediate when full, throttles to rate, rejects bad input, rates below 1/s, requests above capacity)
+* Rate limiter math (immediate when full, throttles to rate, rejects bad rate or capacity, rates below 1/s, requests above capacity)
 * Checkpointer (enqueue dedup, status transitions, persistence across handles, `IN_PROGRESS` reset)
-* Runner (clean run, transient retry, permanent → DLQ, exhausted → DLQ, resume from disk after kill, concurrency cap, rate-limiter integration, unserialisable result called once, hung call timed out)
+* Runner (clean run, transient retry, permanent → DLQ, exhausted → DLQ, resume from disk after kill, concurrency cap, rate-limiter integration, unserialisable result called once, failed result store sent to DLQ, bucket too small for one call rejected, hung call timed out)
 
 ## Project layout
 

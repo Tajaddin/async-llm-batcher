@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 import pytest
@@ -39,3 +40,15 @@ async def test_zero_token_request_is_noop() -> None:
     rl = TokenBucketRateLimiter(rate=10, capacity=10)
     await rl.acquire(0)
     assert rl.available_tokens == pytest.approx(10.0, abs=1.0)
+
+
+async def test_rate_below_one_per_second_still_admits_a_call() -> None:
+    rl = TokenBucketRateLimiter(rate=0.5)  # 30 calls/minute
+    await asyncio.wait_for(rl.acquire(1), timeout=1.0)
+    assert rl.capacity == 1.0
+
+
+async def test_request_larger_than_capacity_is_rejected() -> None:
+    rl = TokenBucketRateLimiter(rate=5, capacity=2)
+    with pytest.raises(ValueError, match="capacity"):
+        await asyncio.wait_for(rl.acquire(3), timeout=1.0)

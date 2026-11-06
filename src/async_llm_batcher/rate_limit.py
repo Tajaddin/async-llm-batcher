@@ -22,14 +22,15 @@ class TokenBucketRateLimiter:
     rate:
         Tokens added per second.
     capacity:
-        Max tokens the bucket can hold. Defaults to ``rate`` (1-second burst).
+        Max tokens the bucket can hold. Defaults to ``max(rate, 1)``: a
+        1-second burst, and at least one call even when ``rate`` is below 1/s.
     """
 
     def __init__(self, rate: float, capacity: float | None = None) -> None:
         if rate <= 0:
             raise ValueError("rate must be > 0")
         self.rate = float(rate)
-        self.capacity = float(capacity if capacity is not None else rate)
+        self.capacity = float(capacity if capacity is not None else max(rate, 1.0))
         self._tokens = self.capacity
         self._last_refill = time.monotonic()
         self._lock = asyncio.Lock()
@@ -44,6 +45,9 @@ class TokenBucketRateLimiter:
         """Block until ``tokens`` are available, then decrement."""
         if tokens <= 0:
             return
+        if tokens > self.capacity:
+            # The bucket never holds that many tokens, so waiting would never end.
+            raise ValueError(f"cannot acquire {tokens} tokens from a bucket of capacity {self.capacity}")
         async with self._lock:
             self._refill()
             while self._tokens < tokens:

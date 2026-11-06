@@ -2,35 +2,35 @@
   "fresh": {
     "n_total": 1000,
     "n_attempted": 1000,
-    "n_succeeded": 991,
-    "n_dlq": 9,
-    "total_attempts": 1055,
+    "n_succeeded": 992,
+    "n_dlq": 8,
+    "total_attempts": 1049,
     "completion_rate": 1.0,
-    "mean_attempts_per_success": 1.065,
-    "elapsed_secs": 28.7,
-    "throughput_per_sec": 34.8,
+    "mean_attempts_per_success": 1.057,
+    "elapsed_secs": 29.72,
+    "throughput_per_sec": 33.7,
     "counts": {
-      "dlq": 9,
-      "success": 991
+      "dlq": 8,
+      "success": 992
     }
   },
   "resume_demo": {
     "first_run": {
       "n_attempted": 300,
-      "n_succeeded": 297,
-      "n_dlq": 3,
+      "n_succeeded": 296,
+      "n_dlq": 4,
       "counts_after": {
-        "dlq": 3,
-        "success": 297
+        "dlq": 4,
+        "success": 296
       }
     },
     "resume_run": {
       "n_attempted": 700,
-      "n_succeeded": 991,
-      "n_dlq": 9,
+      "n_succeeded": 994,
+      "n_dlq": 6,
       "counts_after": {
-        "dlq": 9,
-        "success": 991
+        "dlq": 6,
+        "success": 994
       }
     },
     "resume_only_processed_new_prompts": true

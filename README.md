@@ -1,6 +1,6 @@
 # async-llm-batcher
 
-Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-letter queue, and SQLite resume-from-crash state. 1000 prompts at 50 RPS under 5 % transient and 0.5 % permanent failure injection: 991 succeed, 9 DLQ, zero data loss, 1.065 mean attempts per success. Kill mid-run and resume. Only the remaining 700 prompts are processed.
+Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-letter queue, and SQLite resume-from-crash state. 1000 prompts at 50 RPS under 5 % transient and 0.5 % permanent failure injection: 992 succeed, 8 DLQ, zero data loss, 1.057 mean attempts per success. Kill mid-run and resume. Only the remaining 700 prompts are processed.
 
 [![ci](https://github.com/Tajaddin/async-llm-batcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Tajaddin/async-llm-batcher/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -13,28 +13,28 @@ Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-let
 | Metric | Value |
 |---|---:|
 | Total prompts | 1000 |
-| Succeeded | **991** |
-| DLQ (permanent + exhausted retries) | 9 |
+| Succeeded | **992** |
+| DLQ (permanent + exhausted retries) | 8 |
 | **Completion rate** (success + DLQ) | **100.0%**: every prompt accounted for, zero data loss |
-| Mean attempts per success | **1.065** |
-| Total attempts | 1055 |
-| Total wall-clock | 28.7 s |
-| Throughput | 34.8 prompts/s (retries pull below the 50 RPS cap) |
+| Mean attempts per success | **1.057** |
+| Total attempts | 1049 |
+| Total wall-clock | 29.7 s |
+| Throughput | 33.7 prompts/s (retries pull below the 50 RPS cap) |
 
 ### Resume-after-kill demo
 
 ```
 First run (interrupted at 30%):
-  attempted=300  succeeded=297  dlq=3
+  attempted=300  succeeded=296  dlq=4
 
 Resume run (full 1000 prompts queued again):
   attempted=700  (only the remaining ones, the 300 already in SUCCESS/DLQ are skipped)
-  succeeded=991  dlq=9   (cumulative)
+  succeeded=994  dlq=6   (cumulative; the resumed run injects failures with seed + 1)
 ```
 
 The runner reads the existing SQLite state on startup, resets anything stuck in `IN_PROGRESS` back to `PENDING`, and only enqueues prompts not in a terminal state. **Idempotent by construction.**
 
-Reproduce: `python bench/run_1000.py`. Raw JSON in [`bench/results.json`](bench/results.json).
+Reproduce: `python bench/run_1000.py`. Raw JSON in [`bench/results.json`](bench/results.json). Each prompt draws its injected failures from its own RNG, seeded from `--seed` and the prompt id, so every run gives the same counts; only the timings vary (29.7 s and 28.8 s on two consecutive runs).
 
 ## Why this exists
 

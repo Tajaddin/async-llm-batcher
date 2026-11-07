@@ -67,6 +67,10 @@ class BatchRunner:
         resume across processes).
     concurrency:
         Max number of in-flight handler calls.
+    call_timeout_secs:
+        Seconds a single handler call may run. A call that runs longer is
+        cancelled, frees its concurrency slot, and counts as a transient
+        failure. ``None`` disables the limit.
     """
 
     handler: Handler
@@ -74,8 +78,14 @@ class BatchRunner:
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     checkpointer: SqliteCheckpointer | None = None
     concurrency: int = 10
+    call_timeout_secs: float | None = 600.0
 
     def __post_init__(self) -> None:
+        if self.rate_limit is not None and self.rate_limit.capacity < 1:
+            raise ValueError(
+                f"rate_limit capacity is {self.rate_limit.capacity}; it must be >= 1, "
+                "since each handler call takes one token"
+            )
         if self.checkpointer is None:
             self.checkpointer = SqliteCheckpointer(":memory:")
         self._sem = asyncio.Semaphore(self.concurrency)
@@ -112,9 +122,9 @@ class BatchRunner:
                     if self.rate_limit is not None:
                         await self.rate_limit.acquire(1.0)
                     try:
-                        result = await self.handler(pid, text)
-                        cp.mark_success(pid, result)
-                        return
+                        result = await asyncio.wait_for(
+                            self.handler(pid, text), self.call_timeout_secs
+                        )
                     except PermanentError as exc:
                         cp.mark_dlq(pid, f"PermanentError: {exc}")
                         return
@@ -125,6 +135,16 @@ class BatchRunner:
                             cp.mark_dlq(pid, f"exhausted retries, last={exc!r}")
                             return
                         await self.retry.sleep(attempt)
+                    else:
+                        # Outside the retry block: the call already succeeded, so a
+                        # result that cannot be stored must not trigger another call.
+                        try:
+                            cp.mark_success(pid, result)
+                        except (TypeError, ValueError) as exc:
+                            cp.mark_dlq(pid, f"result not JSON-serialisable: {exc}")
+                        except Exception as exc:  # noqa: BLE001
+                            cp.mark_dlq(pid, f"storing the result failed: {type(exc).__name__}: {exc}")
+                        return
 
         start = time.perf_counter()
         await asyncio.gather(*[_worker(pid, text) for pid, text in to_run])

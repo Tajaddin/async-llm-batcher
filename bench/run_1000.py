@@ -44,9 +44,14 @@ RESULTS = BENCH / "results.json"
 
 
 def make_handler(transient_rate: float, permanent_rate: float, seed: int = 7):
-    rng = random.Random(seed)
+    # One RNG per prompt: a shared one would hand out draws in whatever order
+    # the concurrent calls interleave, so the counts would change run to run.
+    rngs: dict[str, random.Random] = {}
 
     async def handler(pid: str, text: str):
+        rng = rngs.get(pid)
+        if rng is None:
+            rng = rngs[pid] = random.Random(f"{seed}:{pid}")
         await asyncio.sleep(0.005 + rng.random() * 0.01)  # 5-15 ms simulated API latency
         r = rng.random()
         if r < permanent_rate:

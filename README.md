@@ -1,6 +1,6 @@
 # async-llm-batcher
 
-Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-letter queue, and SQLite resume-from-crash state. 1000 prompts at 50 RPS under 5 % transient and 0.5 % permanent failure injection: 991 succeed, 9 DLQ, zero data loss, 1.065 mean attempts per success. Kill mid-run and resume. Only the remaining 700 prompts are processed.
+Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-letter queue, and SQLite resume-from-crash state. 1000 prompts at 50 RPS under 5 % transient and 0.5 % permanent failure injection: 992 succeed, 8 DLQ, zero data loss, 1.057 mean attempts per success. Kill mid-run and resume. Only the remaining 700 prompts are processed.
 
 [![ci](https://github.com/Tajaddin/async-llm-batcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Tajaddin/async-llm-batcher/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -13,28 +13,28 @@ Asyncio LLM batch runner with rate limiting, exponential-backoff retry, dead-let
 | Metric | Value |
 |---|---:|
 | Total prompts | 1000 |
-| Succeeded | **991** |
-| DLQ (permanent + exhausted retries) | 9 |
+| Succeeded | **992** |
+| DLQ (permanent + exhausted retries) | 8 |
 | **Completion rate** (success + DLQ) | **100.0%**: every prompt accounted for, zero data loss |
-| Mean attempts per success | **1.065** |
-| Total attempts | 1055 |
-| Total wall-clock | 28.7 s |
-| Throughput | 34.8 prompts/s (retries pull below the 50 RPS cap) |
+| Mean attempts per success | **1.057** |
+| Total attempts | 1049 |
+| Total wall-clock | 29.7 s |
+| Throughput | 33.7 prompts/s (retries pull below the 50 RPS cap) |
 
 ### Resume-after-kill demo
 
 ```
 First run (interrupted at 30%):
-  attempted=300  succeeded=297  dlq=3
+  attempted=300  succeeded=296  dlq=4
 
 Resume run (full 1000 prompts queued again):
   attempted=700  (only the remaining ones, the 300 already in SUCCESS/DLQ are skipped)
-  succeeded=991  dlq=9   (cumulative)
+  succeeded=994  dlq=6   (cumulative; the resumed run injects failures with seed + 1)
 ```
 
 The runner reads the existing SQLite state on startup, resets anything stuck in `IN_PROGRESS` back to `PENDING`, and only enqueues prompts not in a terminal state. **Idempotent by construction.**
 
-Reproduce: `python bench/run_1000.py`. Raw JSON in [`bench/results.json`](bench/results.json).
+Reproduce: `python bench/run_1000.py`. Raw JSON in [`bench/results.json`](bench/results.json). Each prompt draws its injected failures from its own RNG, seeded from `--seed` and the prompt id, so every run gives the same counts; only the timings vary (29.7 s and 28.8 s on two consecutive runs).
 
 ## Why this exists
 
@@ -143,6 +143,8 @@ async def handler(pid, text):
 
 Anything else (a plain `Exception`) is treated as transient by default. Once `RetryPolicy.max_attempts` is hit, the prompt is moved to DLQ with the last exception attached.
 
+The handler's return value is stored as JSON, so return plain data (`resp.content[0].text`, not `resp`). A result that can't be serialised sends the prompt to DLQ as `result not JSON-serialisable`, and any other failure to store it (a locked database, say) sends it there as `storing the result failed`, with the error type. Either way the call is never repeated, since it already succeeded, and the rest of the batch carries on.
+
 ## Resume from crash
 
 Three things make the runner crash-safe:
@@ -171,6 +173,7 @@ Covered by `tests/test_runner.py::test_resume_from_disk_after_kill`.
 | Knob | Type | Default | Effect |
 |---|---|---|---|
 | `concurrency` | int | 10 | max in-flight handler calls |
+| `call_timeout_secs` | `float \| None` | 600 | per-call limit. A call that runs longer is cancelled and retried as a transient failure. `None` disables it |
 | `rate_limit` | `TokenBucketRateLimiter \| None` | `None` | hard rate cap, in calls/sec |
 | `RetryPolicy.max_attempts` | int | 5 | retries before DLQ |
 | `RetryPolicy.base_delay_secs` | float | 0.5 | first backoff |
@@ -187,14 +190,14 @@ pytest -q
 ```
 
 ```
-21 passed in 3.33s
+30 passed
 ```
 
 `pytest-asyncio` test suite. Covers:
 
-* Rate limiter math (immediate when full, throttles to rate, rejects bad input)
+* Rate limiter math (immediate when full, throttles to rate, rejects bad rate or capacity, rates below 1/s, requests above capacity)
 * Checkpointer (enqueue dedup, status transitions, persistence across handles, `IN_PROGRESS` reset)
-* Runner (clean run, transient retry, permanent → DLQ, exhausted → DLQ, resume from disk after kill, concurrency cap, rate-limiter integration)
+* Runner (clean run, transient retry, permanent → DLQ, exhausted → DLQ, resume from disk after kill, concurrency cap, rate-limiter integration, unserialisable result called once, failed result store sent to DLQ, bucket too small for one call rejected, hung call timed out)
 
 ## Project layout
 
@@ -206,7 +209,7 @@ pytest -q
 │   ├── retry.py         # RetryPolicy + TransientError + PermanentError
 │   ├── checkpointer.py  # SQLite per-prompt state
 │   └── runner.py        # BatchRunner with concurrency + retry + DLQ
-├── tests/               # 21 pytest-asyncio cases
+├── tests/               # 26 pytest-asyncio cases
 └── bench/
     ├── run_1000.py      # 1000-prompt benchmark + resume-after-kill demo
     └── results.json
